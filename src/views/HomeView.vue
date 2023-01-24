@@ -1,64 +1,76 @@
 <template>
-  <div class="w-[500px]">
-    <form @submit.prevent="search">
-      <v-select
-        v-model="selected.city"
-        :options="cityList"
-        :reduce="option => option.City"
-        label="CityName"
-        :clearable="false"
-        placeholder="選擇縣市"
-        @option:selected="getRouteList"
-      />
-      <v-select
-        v-model="selected.routeName"
-        :options="routeList"
-        :reduce="option => option.label"
-        :clearable="false"
-        placeholder="選擇路線"
-      />
-      <button type="submit">查詢</button>
-    </form>
+  <div class="flex">
+    <div class="flex-grow h-screen overflow-auto">
+      <form @submit.prevent="search">
+        <v-select
+          v-model="selected.city"
+          :options="cityList"
+          :reduce="option => option.City"
+          label="CityName"
+          :clearable="false"
+          placeholder="選擇縣市"
+          @option:selected="getRouteList"
+        />
+        <v-select
+          v-model="selected.routeName"
+          :options="routeList"
+          :reduce="option => option.label"
+          :clearable="false"
+          placeholder="選擇路線"
+        />
+        <button type="submit" class="w-full">查詢</button>
+      </form>
 
-    <ul class="flex">
-      <router-link
-        v-for="item in directionTabs"
-        :to="{ query: { dir: item.dir } }"
-        custom
-        v-slot="{ navigate }"
-      >
-        <li class="w-1/2 text-center cursor-pointer" @click="navigate">往 {{ item.desc }}</li>
-      </router-link>
-    </ul>
+      <ul class="flex">
+        <router-link
+          v-for="item in directionTabs"
+          :to="{ query: { dir: item.dir } }"
+          custom
+          v-slot="{ navigate }"
+        >
+          <li class="w-1/2 text-center cursor-pointer" @click="navigate">往 {{ item.desc }}</li>
+        </router-link>
+      </ul>
 
-    <table class="table w-full p-4 bg-white rounded-lg shadow">
-      <thead>
-        <tr>
-          <th class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap">
-            站名
-          </th>
-          <th class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap">
-            預估到站
-          </th>
-          <th class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap">
-            車牌號碼
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="route in routes" class="text-gray-700">
-          <td class="p-4 border-b-2 dark:border-dark-5">
-            {{ route.stopName }}
-          </td>
-          <td class="p-4 border-b-2 dark:border-dark-5">
-            {{ formatEstimateTime(route) }}
-          </td>
-          <td class="p-4 border-b-2 dark:border-dark-5">
-            {{ route.plateNumb }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
+      <table class="table w-full p-4 bg-white rounded-lg shadow">
+        <thead>
+          <tr>
+            <th
+              class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap"
+            >
+              站名
+            </th>
+            <th
+              class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap"
+            >
+              預估到站
+            </th>
+            <th
+              class="p-4 font-normal text-gray-900 border-b-2 dark:border-dark-5 whitespace-nowrap"
+            >
+              車牌號碼
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="route in routes" class="text-gray-700">
+            <td class="p-4 border-b-2 dark:border-dark-5">
+              {{ route.stopName }}
+            </td>
+            <td class="p-4 border-b-2 dark:border-dark-5">
+              {{ formatEstimateTime(route) }}
+            </td>
+            <td class="p-4 border-b-2 dark:border-dark-5">
+              {{ route.plateNumb }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="w-2/3 h-screen">
+      <div id="map" class="h-full"></div>
+    </div>
   </div>
 </template>
 
@@ -66,6 +78,9 @@
 import dayjs from 'dayjs'
 import vSelect from 'vue-select'
 import 'vue-select/dist/vue-select.css'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import Wkt from 'wicket'
 import { useMainStore } from '@/stores/main'
 
 const props = defineProps({
@@ -83,6 +98,48 @@ const selected = reactive({
   routeName: route.params.routeName,
 })
 const direction = computed(() => (route.query.dir === '1' ? 1 : 0))
+const routes = computed(() => {
+  return routeStopComputed.value.map(stop => {
+    const { EstimateTime, NextBusTime, PlateNumb } =
+      arrivalTime.value.find(time => {
+        return time.StopName.Zh_tw === stop.StopName.Zh_tw && time.Direction === direction.value
+      }) || {}
+    return {
+      stopName: stop.StopName.Zh_tw,
+      EstimateTime,
+      NextBusTime,
+      plateNumb: PlateNumb === '-1' ? '' : PlateNumb,
+    }
+  })
+})
+const search = async () => {
+  if (!selected.routeName) return
+
+  const params = {
+    city: selected.city,
+    routeName: selected.routeName,
+  }
+
+  router.push({ params, query: { dir: direction.value } })
+
+  getStopOfRoute(params)
+  getEstimatedTimeOfArrival(params)
+  addPolyline()
+}
+const formatEstimateTime = ({ EstimateTime, NextBusTime }) => {
+  if (EstimateTime >= 180) return `約 ${Math.floor(EstimateTime / 60)} 分`
+  if (EstimateTime > 0) return '即將進站'
+  if (EstimateTime === 0) return '進站中'
+  if (!NextBusTime) return '未發車'
+  return dayjs(NextBusTime).format('HH:mm')
+}
+const checkToken = async (status, callback) => {
+  if (status === 429 || status === 401) {
+    const { access_token } = await mainStore.getToken()
+    authorization.value = `Bearer ${access_token}`
+    callback()
+  }
+}
 
 // city list
 const cityList = ref([])
@@ -158,43 +215,62 @@ const getStopOfRoute = async data => {
   }
 }
 
-const routes = computed(() => {
-  return routeStopComputed.value.map(stop => {
-    const { EstimateTime, NextBusTime, PlateNumb } =
-      arrivalTime.value.find(time => {
-        return time.StopName.Zh_tw === stop.StopName.Zh_tw && time.Direction === direction.value
-      }) || {}
-    return {
-      stopName: stop.StopName.Zh_tw,
-      EstimateTime,
-      NextBusTime,
-      plateNumb: PlateNumb === '-1' ? '' : PlateNumb,
-    }
+// location
+let currentPosition = {
+  latitude: 25.0657976,
+  longitude: 121.5352149,
+}
+const getCurrentPosition = () => {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(pos => {
+      currentPosition = pos.coords
+      resolve()
+    }, reject)
   })
-})
+}
 
-const search = async () => {
-  if (!selected.routeName) return
-  const params = {
-    city: selected.city,
-    routeName: selected.routeName,
-  }
-  router.push({ params, query: { dir: direction.value } })
-  getStopOfRoute(params)
-  getEstimatedTimeOfArrival(params)
+// map
+let map = null
+const initMap = () => {
+  const { latitude, longitude } = currentPosition
+  map = L.map('map').setView([latitude, longitude], 15)
+  L.tileLayer(
+    'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}',
+    {
+      attribution:
+        '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> <strong><a href="https://www.mapbox.com/map-feedback/" target="_blank">Improve this map</a></strong>',
+      id: 'mapbox/streets-v12',
+      accessToken: import.meta.env.VITE_MAPBOX_TOKEN,
+    }
+  ).addTo(map)
 }
-const formatEstimateTime = ({ EstimateTime, NextBusTime }) => {
-  if (EstimateTime >= 180) return `約 ${Math.floor(EstimateTime / 60)} 分`
-  if (EstimateTime > 0) return '即將進站'
-  if (EstimateTime === 0) return '進站中'
-  if (!NextBusTime) return '未發車'
-  return dayjs(NextBusTime).format('HH:mm')
-}
-const checkToken = async (status, callback) => {
-  if (status === 429 || status === 401) {
-    const { access_token } = await mainStore.getToken()
-    authorization.value = `Bearer ${access_token}`
-    callback()
+const addPolyline = async () => {
+  try {
+    const geometry = await mainStore
+      .getShapeOfRoute({
+        city: selected.city,
+        routeName: selected.routeName,
+      })
+      .then(res => res.find(el => el.RouteName.Zh_tw === selected.routeName)?.Geometry)
+
+    if (!geometry) return
+
+    // remove all polyline
+    map.eachLayer(layer => {
+      if (layer instanceof L.Polyline) {
+        map.removeLayer(layer)
+      }
+    })
+
+    const wkt = new Wkt.Wkt()
+    const json = wkt.read(geometry).toJson()
+    const layer = L.geoJSON(json).addTo(map)
+    map.fitBounds(layer.getBounds())
+  } catch (error) {
+    console.error(error.message)
+    if (error.response) {
+      checkToken(error.response.status, addPolyline)
+    }
   }
 }
 
@@ -208,7 +284,9 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await getCurrentPosition()
+  initMap()
   getCityList()
   if (props.city && props.routeName) {
     getRouteList()

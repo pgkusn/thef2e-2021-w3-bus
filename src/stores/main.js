@@ -66,6 +66,16 @@ export const useMainStore = defineStore('main', () => {
       throw error
     }
   }
+  const getShapeOfRoute = async ({ city, routeName }) => {
+    try {
+      return await basicAPI({
+        url: `/v2/Bus/Shape/City/${city}/${routeName}`,
+        headers: { Authorization: authorization.value },
+      }).then(res => res.data)
+    } catch (error) {
+      throw error
+    }
+  }
 
   return {
     authorization,
@@ -75,5 +85,6 @@ export const useMainStore = defineStore('main', () => {
     getRouteList,
     getEstimatedTimeOfArrival,
     getStopOfRoute,
+    getShapeOfRoute,
   }
 })
