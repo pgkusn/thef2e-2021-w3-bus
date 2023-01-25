@@ -26,6 +26,13 @@ export const useMainStore = defineStore('main', () => {
       console.error(error.message)
     }
   }
+  const checkToken = async (status, callback) => {
+    if (status === 429 || status === 401) {
+      const { access_token } = await getToken()
+      authorization.value = `Bearer ${access_token}`
+      callback()
+    }
+  }
   const getCityList = async () => {
     try {
       return await basicAPI({
@@ -33,6 +40,9 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
+      if (error.response) {
+        checkToken(error.response.status, getCityList)
+      }
       throw error
     }
   }
@@ -43,36 +53,51 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
+      if (error.response) {
+        checkToken(error.response.status, getRouteList)
+      }
       throw error
     }
   }
-  const getEstimatedTimeOfArrival = async ({ city, routeName }) => {
+  const getEstimatedTimeOfArrival = async data => {
+    const { city, routeName } = data
     try {
       return await basicAPI({
         url: `/v2/Bus/EstimatedTimeOfArrival/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
+      if (error.response) {
+        checkToken(error.response.status, () => getEstimatedTimeOfArrival(data))
+      }
       throw error
     }
   }
-  const getStopOfRoute = async ({ city, routeName }) => {
+  const getStopOfRoute = async data => {
+    const { city, routeName } = data
     try {
       return await basicAPI({
         url: `/v2/Bus/StopOfRoute/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
+      if (error.response) {
+        checkToken(error.response.status, () => getStopOfRoute(data))
+      }
       throw error
     }
   }
-  const getShapeOfRoute = async ({ city, routeName }) => {
+  const getShapeOfRoute = async data => {
+    const { city, routeName } = data
     try {
       return await basicAPI({
         url: `/v2/Bus/Shape/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
+      if (error.response) {
+        checkToken(error.response.status, () => getShapeOfRoute(data))
+      }
       throw error
     }
   }
