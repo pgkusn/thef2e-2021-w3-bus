@@ -54,7 +54,7 @@ export const useMainStore = defineStore('main', () => {
       }).then(res => res.data)
     } catch (error) {
       if (error.response) {
-        checkToken(error.response.status, getRouteList)
+        checkToken(error.response.status, () => getRouteList(city))
       }
       throw error
     }

@@ -32,7 +32,7 @@
       </form>
     </div>
 
-    <div class="route overflow-hidden rounded-2xl shadow">
+    <div v-if="routes.length" class="route overflow-hidden rounded-2xl shadow">
       <nav class="flex">
         <router-link
           v-for="item in directionTabs"
@@ -45,7 +45,7 @@
           往 {{ item.desc }}
         </router-link>
       </nav>
-      <div class="table-container overflow-auto">
+      <div class="table-container overflow-auto bg-white">
         <table class="w-full text-gray-900">
           <tr v-for="route in routes" class="h-10 odd:bg-[#F2F2F2] even:bg-[#FEFCFC]">
             <td width="50%">
@@ -84,6 +84,11 @@ import 'leaflet/dist/leaflet.css'
 import Wkt from 'wicket'
 import dayjs from 'dayjs'
 import { useMainStore } from '@/stores/main'
+
+// leaflet marker
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
+import iconUrl from 'leaflet/dist/images/marker-icon.png'
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
 const props = defineProps({
   city: String,
@@ -141,9 +146,10 @@ const getCityList = async () => {
 
 // route dropdown & direction tabs
 const routeList = ref([])
-const directionTabs = computed(
-  () => routeList.value.find(el => el.label === selected.routeName)?.direction || []
-)
+const directionTabs = computed(() => {
+  if (routes.value.length === 0) return []
+  return routeList.value.find(el => el.label === selected.routeName)?.direction || []
+})
 const getRouteList = async () => {
   try {
     routeList.value = await mainStore.getRouteList(selected.city).then(res =>
@@ -192,8 +198,8 @@ const getStopOfRoute = async data => {
 
 // map
 let map = null
-const initMap = () => {
-  map = L.map('map').setView([25.0657976, 121.5352149], 15)
+const initMap = ({ latitude, longitude }) => {
+  map = L.map('map').setView([latitude, longitude], 15)
   L.tileLayer(
     'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}',
     {
@@ -230,13 +236,18 @@ const addPolyline = async () => {
     console.error(error.message)
   }
 }
-const moveToCurrentPosition = async () => {
-  try {
-    const position = await getCurrentPosition()
-    const { latitude, longitude } = position
-    map.panTo([latitude, longitude])
-    L.marker([latitude, longitude]).addTo(map).bindPopup('You are here').openPopup()
-  } catch (error) {}
+const showCurrentPosition = ({ latitude, longitude }) => {
+  const icon = new L.Icon({
+    iconRetinaUrl,
+    iconUrl,
+    shadowUrl,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    tooltipAnchor: [16, -28],
+    shadowSize: [41, 41],
+  })
+  L.marker([latitude, longitude], { icon }).addTo(map).bindPopup('You are here').openPopup()
 }
 
 // search
@@ -268,15 +279,20 @@ watch(
 
 onMounted(async () => {
   getCityList()
-  initMap()
+
+  let position = { latitude: 25.0657976, longitude: 121.5352149 }
+  try {
+    position = await getCurrentPosition()
+    initMap(position)
+    showCurrentPosition(position)
+  } catch (error) {
+    initMap(position)
+  }
 
   if (props.city && props.routeName) {
     getRouteList()
     search()
-    return
   }
-
-  moveToCurrentPosition()
 })
 </script>
 
