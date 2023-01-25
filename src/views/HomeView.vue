@@ -121,6 +121,13 @@ const formatTime = ({ EstimateTime, NextBusTime }) => {
   if (!NextBusTime) return '未發車'
   return dayjs(NextBusTime).format('HH:mm')
 }
+const getCurrentPosition = () => {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(pos => {
+      resolve(pos.coords)
+    }, reject)
+  })
+}
 
 // city dropdown
 const cityList = ref([])
@@ -134,10 +141,9 @@ const getCityList = async () => {
 
 // route dropdown & direction tabs
 const routeList = ref([])
-const directionTabs = computed(() => {
-  if (!routeStop.value.length) return []
-  return routeList.value.find(el => el.label === selected.routeName)?.direction
-})
+const directionTabs = computed(
+  () => routeList.value.find(el => el.label === selected.routeName)?.direction || []
+)
 const getRouteList = async () => {
   try {
     routeList.value = await mainStore.getRouteList(selected.city).then(res =>
@@ -184,25 +190,10 @@ const getStopOfRoute = async data => {
   }
 }
 
-// location
-let currentPosition = {
-  latitude: 25.0657976,
-  longitude: 121.5352149,
-}
-const getCurrentPosition = () => {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(pos => {
-      currentPosition = pos.coords
-      resolve()
-    }, reject)
-  })
-}
-
 // map
 let map = null
 const initMap = () => {
-  const { latitude, longitude } = currentPosition
-  map = L.map('map').setView([latitude, longitude], 15)
+  map = L.map('map').setView([25.0657976, 121.5352149], 15)
   L.tileLayer(
     'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}',
     {
@@ -239,6 +230,14 @@ const addPolyline = async () => {
     console.error(error.message)
   }
 }
+const moveToCurrentPosition = async () => {
+  try {
+    const position = await getCurrentPosition()
+    const { latitude, longitude } = position
+    map.panTo([latitude, longitude])
+    L.marker([latitude, longitude]).addTo(map).bindPopup('You are here').openPopup()
+  } catch (error) {}
+}
 
 // search
 const isLoading = ref(false)
@@ -268,17 +267,16 @@ watch(
 )
 
 onMounted(async () => {
-  try {
-    await getCurrentPosition()
-  } catch (error) {}
-
-  initMap()
   getCityList()
+  initMap()
 
   if (props.city && props.routeName) {
     getRouteList()
     search()
+    return
   }
+
+  moveToCurrentPosition()
 })
 </script>
 
