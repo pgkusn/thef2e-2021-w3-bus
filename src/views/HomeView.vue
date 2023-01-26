@@ -22,13 +22,22 @@
           :clearable="false"
           placeholder="選擇路線"
         />
-        <button
-          type="submit"
-          class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50"
-          :disabled="!selected.routeName || isLoading"
-        >
-          搜尋
-        </button>
+        <div class="flex gap-4">
+          <button
+            type="submit"
+            class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50"
+            :disabled="!selected.routeName"
+          >
+            搜尋
+          </button>
+          <button
+            class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50"
+            :disabled="!selected.routeName || !routes.length"
+            @click.prevent="refresh"
+          >
+            重新整理
+          </button>
+        </div>
       </form>
     </div>
 
@@ -251,9 +260,9 @@ const showCurrentPosition = ({ latitude, longitude }) => {
 }
 
 // search
-const isLoading = ref(false)
+const isSearching = ref(false)
 const search = async () => {
-  if (!selected.routeName) return
+  if (!selected.routeName || isSearching.value) return
 
   const params = {
     city: selected.city,
@@ -262,9 +271,16 @@ const search = async () => {
 
   router.push({ params, query: { dir: direction.value } })
 
-  isLoading.value = true
+  isSearching.value = true
   await Promise.all([getStopOfRoute(params), getEstimatedTimeOfArrival(params), addPolyline()])
-  isLoading.value = false
+  isSearching.value = false
+}
+const refresh = () => {
+  if (isSearching.value) return
+  getEstimatedTimeOfArrival({
+    city: selected.city,
+    routeName: selected.routeName,
+  })
 }
 
 watch(selected, () => {
