@@ -1,35 +1,11 @@
-# w3-bus
+# 全台公車動態資訊
 
-This template should help get you started developing with Vue 3 in Vite.
+使用 Vue3 串接 TDX API 建置的公車動態查詢系統，可依據路線名稱查詢站點及到站時間，並整合了 Leaflet 地圖套件顯示當前位置及公車路線。
 
-## Recommended IDE Setup
+## Skill
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=Vue.vscode-typescript-vue-plugin).
+Vue3、Vue Router、Pinia、Tailwind CSS、Leaflet、Vite
 
-## Customize configuration
+## Mockup
 
-See [Vite Configuration Reference](https://vitejs.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Run Unit Tests with [Vitest](https://vitest.dev/)
-
-```sh
-npm run test:unit
-```
+https://www.figma.com/file/xOMBI7dB1EEIyXfGdKuHqF/
