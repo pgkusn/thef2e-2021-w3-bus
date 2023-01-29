@@ -31,11 +31,12 @@
             搜尋
           </button>
           <button
-            class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50"
+            class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50 [&:hover>span]:hidden [&:hover]:before:content-['立即更新']"
             :disabled="!selected.routeName || !routes.length"
             @click.prevent="refresh"
           >
-            重新整理
+            <span v-if="routes.length"> {{ time }} 秒後更新 </span>
+            <span v-else> 立即更新 </span>
           </button>
         </div>
       </form>
@@ -92,6 +93,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Wkt from 'wicket'
 import dayjs from 'dayjs'
+import { useTimeoutPoll } from '@vueuse/core'
+import { promiseTimeout } from '@vueuse/shared'
 import { useMainStore } from '@/stores/main'
 
 // leaflet marker
@@ -259,7 +262,7 @@ const showCurrentPosition = ({ latitude, longitude }) => {
   L.marker([latitude, longitude], { icon }).addTo(map).bindPopup('You are here').openPopup()
 }
 
-// search
+// search & refresh
 const isSearching = ref(false)
 const search = async () => {
   if (!selected.routeName || isSearching.value) return
@@ -272,24 +275,54 @@ const search = async () => {
   router.push({ params, query: { dir: direction.value } })
 
   isSearching.value = true
+  pause()
+
   await Promise.all([getStopOfRoute(params), getEstimatedTimeOfArrival(params), addPolyline()])
+
   isSearching.value = false
+  resume()
+  time.value = totalTime
 }
-const refresh = () => {
+const refresh = async () => {
   if (isSearching.value) return
-  getEstimatedTimeOfArrival({
+
+  pause()
+
+  await getEstimatedTimeOfArrival({
     city: selected.city,
     routeName: selected.routeName,
   })
+
+  if (!time.value) {
+    await promiseTimeout(1000)
+  }
+
+  resume()
+  time.value = totalTime
 }
 
-watch(selected, () => {
-  routeStop.value = []
-})
+// countdown
+const totalTime = 30
+const time = ref(totalTime)
+const { pause, resume } = useTimeoutPoll(async () => {
+  time.value--
+  if (!time.value) {
+    refresh()
+  }
+}, 1000)
+
 watch(
   () => selected.city,
   () => {
     selected.routeName = ''
+  }
+)
+watch(
+  () => selected.routeName,
+  () => {
+    routeStop.value = []
+    pause()
+    time.value = totalTime
   }
 )
 
@@ -316,6 +349,7 @@ onMounted(async () => {
 :root {
   --vs-dropdown-color: theme('colors.gray.1000');
   --vs-selected-color: theme('colors.gray.1000');
+  --vs-search-input-placeholder-color: theme('colors.gray.1000');
   background-color: #e5e5e5;
 }
 .grid {
