@@ -8,29 +8,23 @@ const basicAPI = axios.create({
 
 export const useMainStore = defineStore('main', () => {
   const authorization = useLocalStorage('access_token', '')
-  const isLoading = ref(false)
 
-  const getToken = async () => {
+  const refreshToken = async callback => {
     try {
       const data = {
         grant_type: 'client_credentials',
         client_id: import.meta.env.VITE_CLIENT_ID,
         client_secret: import.meta.env.VITE_CLIENT_SECRET,
       }
-      return await axios({
+      const { access_token } = await axios({
         method: 'post',
         url: 'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token',
         data: qs.stringify(data),
       }).then(res => res.data)
+      authorization.value = `Bearer ${access_token}`
+      return await callback()
     } catch (error) {
       console.error(error.message)
-    }
-  }
-  const checkToken = async (status, callback) => {
-    if (status === 429 || status === 401) {
-      const { access_token } = await getToken()
-      authorization.value = `Bearer ${access_token}`
-      callback()
     }
   }
   const getCityList = async () => {
@@ -40,8 +34,8 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
-      if (error.response) {
-        checkToken(error.response.status, getCityList)
+      if (error.response.status === 429 || error.response.status === 401) {
+        return await refreshToken(getCityList)
       }
       throw error
     }
@@ -53,8 +47,8 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
-      if (error.response) {
-        checkToken(error.response.status, () => getRouteList(city))
+      if (error.response.status === 429 || error.response.status === 401) {
+        return await refreshToken(() => getRouteList(city))
       }
       throw error
     }
@@ -67,8 +61,8 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
-      if (error.response) {
-        checkToken(error.response.status, () => getEstimatedTimeOfArrival(data))
+      if (error.response.status === 429 || error.response.status === 401) {
+        return await refreshToken(() => getEstimatedTimeOfArrival(data))
       }
       throw error
     }
@@ -81,8 +75,8 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
-      if (error.response) {
-        checkToken(error.response.status, () => getStopOfRoute(data))
+      if (error.response.status === 429 || error.response.status === 401) {
+        return await refreshToken(() => getStopOfRoute(data))
       }
       throw error
     }
@@ -95,8 +89,8 @@ export const useMainStore = defineStore('main', () => {
         headers: { Authorization: authorization.value },
       }).then(res => res.data)
     } catch (error) {
-      if (error.response) {
-        checkToken(error.response.status, () => getShapeOfRoute(data))
+      if (error.response.status === 429 || error.response.status === 401) {
+        return await refreshToken(() => getShapeOfRoute(data))
       }
       throw error
     }
@@ -104,8 +98,6 @@ export const useMainStore = defineStore('main', () => {
 
   return {
     authorization,
-    isLoading,
-    getToken,
     getCityList,
     getRouteList,
     getEstimatedTimeOfArrival,
