@@ -95,6 +95,7 @@ import Wkt from 'wicket'
 import dayjs from 'dayjs'
 import { useTimeoutPoll } from '@vueuse/core'
 import { promiseTimeout } from '@vueuse/shared'
+import { debounce } from 'lodash-es'
 import { useMainStore } from '@/stores/main'
 
 // leaflet marker
@@ -264,7 +265,7 @@ const showCurrentPosition = ({ latitude, longitude }) => {
 
 // search & refresh
 const isSearching = ref(false)
-const search = async () => {
+const search = debounce(async () => {
   if (!selected.routeName || isSearching.value) return
 
   const params = {
@@ -282,8 +283,8 @@ const search = async () => {
   isSearching.value = false
   resume()
   time.value = totalTime
-}
-const refresh = async () => {
+}, 500)
+const refresh = debounce(async () => {
   if (isSearching.value) return
 
   pause()
@@ -299,7 +300,7 @@ const refresh = async () => {
 
   resume()
   time.value = totalTime
-}
+}, 500)
 
 // countdown
 const totalTime = 30
