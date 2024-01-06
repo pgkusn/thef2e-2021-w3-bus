@@ -244,7 +244,7 @@ onMounted(() => {
           v-for="item in directionTabs"
           :to="{ query: { dir: item.dir } }"
           :class="[
-            'w-1/2 p-1.5 text-center text-white',
+            'w-1/2 p-1.5 text-center text-white text-truncate',
             item.dir === currentDirection ? 'bg-primary-light' : 'bg-[#BFCDFF]',
           ]"
         >

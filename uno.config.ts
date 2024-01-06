@@ -22,4 +22,5 @@ export default defineConfig({
       },
     },
   },
+  safelist: ['text-#FFBD37', 'text-#FA8072'],
 })
