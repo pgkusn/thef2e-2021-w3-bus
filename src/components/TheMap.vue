@@ -1,22 +1,39 @@
 <script lang="ts" setup>
 import L from 'leaflet'
-import Wkt from 'wicket'
 import 'leaflet/dist/leaflet.css'
+import Wkt from 'wicket'
+import { isEqual } from 'lodash-es'
 import * as Types from '@/types'
 
-// marker
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
-import iconUrl from 'leaflet/dist/images/marker-icon.png'
+// marker icon
+import retinaBlueIcon from 'leaflet/dist/images/marker-icon-2x.png'
+import blueIcon from 'leaflet/dist/images/marker-icon.png'
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
 const props = defineProps<{
   geometry: string
+  routes: Types.Routes[]
 }>()
+const emit = defineEmits(['getRouteList'])
 
-// map & polyline
+const route = useRoute()
+
+let currentPosition: Types.Position
+const getCurrentPosition = (): Promise<Types.Position> => {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(pos => {
+      resolve(pos.coords)
+    }, reject)
+  })
+}
+
 let map: L.Map
-const initMap = ({ latitude, longitude }: Types.Position) => {
-  map = L.map('map').setView([latitude, longitude], 15)
+const initMap = (position: Types.Position) => {
+  const { latitude, longitude } = position
+  map = L.map('map', {
+    center: [latitude, longitude],
+    zoom: 15,
+  })
   L.tileLayer(
     'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}',
     {
@@ -27,6 +44,7 @@ const initMap = ({ latitude, longitude }: Types.Position) => {
     }
   ).addTo(map)
 }
+
 const addPolyline = async () => {
   // remove polyline
   map.eachLayer(layer => {
@@ -34,25 +52,32 @@ const addPolyline = async () => {
       map?.removeLayer(layer)
     }
   })
-
   const wkt = new Wkt.Wkt()
   const json = wkt.read(props.geometry).toJson()
   const layer = L.geoJSON(json).addTo(map)
   map.fitBounds(layer.getBounds())
 }
 
-// position & marker
-const getCurrentPosition = (): Promise<Types.Coords> => {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(pos => {
-      resolve(pos.coords)
-    }, reject)
-  })
-}
-const showCurrentPosition = ({ latitude, longitude }: Types.Position) => {
+// marker
+const addMarker = ({
+  position,
+  popupMsg,
+  iconColor = 'blue',
+  isOpenPopup = false,
+}: Types.Marker) => {
+  const iconRetinaUrl = {
+    blue: retinaBlueIcon,
+    green:
+      'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  }
+  const iconUrl = {
+    blue: blueIcon,
+    green:
+      'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+  }
   const icon = new L.Icon({
-    iconRetinaUrl,
-    iconUrl,
+    iconRetinaUrl: iconRetinaUrl[iconColor],
+    iconUrl: iconUrl[iconColor],
     shadowUrl,
     iconSize: [25, 41],
     iconAnchor: [12, 41],
@@ -60,27 +85,73 @@ const showCurrentPosition = ({ latitude, longitude }: Types.Position) => {
     tooltipAnchor: [16, -28],
     shadowSize: [41, 41],
   })
-  if (map) {
-    L.marker([latitude, longitude], { icon }).addTo(map).bindPopup('You are here').openPopup()
+  const marker = L.marker([position.latitude, position.longitude], { icon })
+    .addTo(map)
+    .bindPopup(popupMsg)
+  if (isOpenPopup) {
+    marker.openPopup()
   }
 }
-
-onMounted(async () => {
-  let position = { latitude: 25.0657976, longitude: 121.5352149 }
-
-  try {
-    position = await getCurrentPosition()
-    initMap(position)
-    showCurrentPosition(position)
-  } catch (error) {
-    initMap(position)
-  }
-
-  watchEffect(() => {
-    if (props.geometry) {
-      addPolyline()
+const removeMarkers = () => {
+  map.eachLayer(layer => {
+    if (layer instanceof L.Marker) {
+      map?.removeLayer(layer)
     }
   })
+}
+const addStopMarkers = (position?: Types.Position) => {
+  props.routes.forEach(item => {
+    addMarker({
+      position: item.stopPosition,
+      popupMsg: item.stopName,
+      isOpenPopup: isEqual(item.stopPosition, position),
+    })
+  })
+}
+const addUserMarker = (isOpenPopup: boolean = false) => {
+  if (!currentPosition) return
+  addMarker({
+    position: currentPosition,
+    popupMsg: 'You are here',
+    iconColor: 'green',
+    isOpenPopup,
+  })
+}
+
+const updateMap = () => {
+  addPolyline()
+  removeMarkers()
+  addStopMarkers()
+  addUserMarker()
+}
+const moveMap = (position: Types.Position) => {
+  removeMarkers()
+  addStopMarkers(position)
+  addUserMarker()
+  map.flyTo([position.latitude, position.longitude], 15)
+}
+defineExpose({ updateMap, moveMap })
+
+watch(
+  () => route.query.dir,
+  async () => {
+    await nextTick()
+    updateMap()
+  }
+)
+
+onMounted(async () => {
+  try {
+    currentPosition = await getCurrentPosition()
+    initMap(currentPosition)
+    addUserMarker(true)
+  } catch (error) {
+    initMap({ latitude: 25.0657976, longitude: 121.5352149 })
+  }
+
+  if (route.params.city && route.params.routeName) {
+    emit('getRouteList')
+  }
 })
 </script>
 

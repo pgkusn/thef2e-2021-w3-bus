@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import vSelect from 'vue-select'
 import 'vue-select/dist/vue-select.css'
-import dayjs from 'dayjs'
 import { debounce } from 'lodash-es'
 import { useTimeoutPoll } from '@vueuse/core'
-import { promiseTimeout } from '@vueuse/shared'
+import { AxiosError } from 'axios'
 import { useMainStore } from '@/stores/main'
+import { formatTime } from '@/utils/formatTime'
 import * as Types from '@/types'
 
 const props = defineProps<{
@@ -18,19 +18,8 @@ const router = useRouter()
 const route = useRoute()
 
 const selectedCity = ref(props.city)
-const selectedRouteName = ref(props.routeName)
-const currentDirection = computed(() => (route.query.dir === '1' ? 1 : 0))
-
-const formatTime = (EstimateTime = -1, NextBusTime = -1) => {
-  if (EstimateTime >= 180)
-    return `<span class="text-primary-light">約 ${Math.floor(EstimateTime / 60)} 分</span>`
-  if (EstimateTime > 0) return '<span class="text-[#FFBD37]">即將進站</span>'
-  if (EstimateTime === 0) return '<span class="text-[salmon]">進站中</span>'
-
-  if (NextBusTime === -1) return '未發車'
-
-  return dayjs(NextBusTime).format('HH:mm')
-}
+const selectedRoute = ref<Types.RouteList | null>()
+const currentDirection = computed(() => Number(route.query.dir) || 0)
 
 // city dropdown
 const cityList = ref([])
@@ -38,8 +27,10 @@ const getCityList = async () => {
   try {
     cityList.value = await mainStore.getCityList()
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error.message)
+    const axiosError = error as AxiosError
+    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+      await mainStore.refreshToken()
+      getCityList()
     }
   }
 }
@@ -47,40 +38,38 @@ const getCityList = async () => {
 // route dropdown & direction tabs
 const routeList = ref<Types.RouteList[]>([])
 const directionTabs = computed(() => {
-  if (routes.value.length === 0) return []
-  return routeList.value.find(el => el.label === selectedRouteName.value)?.direction || []
+  return (
+    routeList.value.find(el => el.routeName === selectedRoute.value?.routeName)?.direction || []
+  )
 })
 const getRouteList = async () => {
   try {
-    routeList.value = await mainStore.getRouteList(selectedCity.value).then(res =>
-      res.map(el => {
-        const set = new Set()
-        return {
-          label: el.RouteName.Zh_tw,
-          direction: el.SubRoutes.map(subEl => ({
-            dir: subEl.Direction,
-            desc: subEl.Direction ? el.DepartureStopNameZh : el.DestinationStopNameZh,
-          })).filter(subEl => (!set.has(subEl.dir) ? set.add(subEl.dir) : false)),
-        }
-      })
-    )
+    routeList.value = await mainStore.getRouteList(selectedCity.value)
+    // search by url
+    const route = routeList.value.find(item => item.routeName === props.routeName)
+    if (route) {
+      selectedRoute.value = route
+      search()
+    }
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error.message)
+    const axiosError = error as AxiosError
+    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+      await mainStore.refreshToken()
+      getRouteList()
     }
   }
 }
 
 // arrival time
 const arrivalTime = ref<Types.ApiEstimatedTimeOfArrival[]>([])
-const getEstimatedTimeOfArrival = async (data: Types.ApiParam) => {
+const getEstimatedTimeOfArrival = async (params: Types.ApiParam) => {
   try {
-    arrivalTime.value = await mainStore
-      .getEstimatedTimeOfArrival(data)
-      .then(res => res.filter(el => el.RouteName.Zh_tw === selectedRouteName.value))
+    arrivalTime.value = await mainStore.getEstimatedTimeOfArrival(params)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error.message)
+    const axiosError = error as AxiosError
+    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+      await mainStore.refreshToken()
+      getEstimatedTimeOfArrival(params)
     }
   }
 }
@@ -88,48 +77,53 @@ const getEstimatedTimeOfArrival = async (data: Types.ApiParam) => {
 // routes
 const routeStop = ref<Types.ApiStopOfRoute[]>([])
 const routes = computed(() => {
-  const routeStopByDirection =
-    routeStop.value.find(el => el.Direction === currentDirection.value)?.Stops || []
-  return routeStopByDirection.map(stop => {
-    const { EstimateTime, NextBusTime, PlateNumb } =
-      arrivalTime.value.find(time => {
-        return (
-          time.StopName.Zh_tw === stop.StopName.Zh_tw && time.Direction === currentDirection.value
-        )
-      }) || {}
+  const stopByDirection =
+    routeStop.value.find(item => item.Direction === currentDirection.value)?.Stops || []
+  return stopByDirection.map(item => {
+    const stopName = item.StopName.Zh_tw
+    const result = arrivalTime.value.find(
+      ({ StopName, Direction }) =>
+        StopName.Zh_tw === stopName && Direction === currentDirection.value
+    )
     return {
-      stopName: stop.StopName.Zh_tw,
-      EstimateTime,
-      NextBusTime,
-      plateNumb: PlateNumb === '-1' ? '' : PlateNumb,
+      stopName,
+      stopPosition: {
+        latitude: item.StopPosition.PositionLat,
+        longitude: item.StopPosition.PositionLon,
+      },
+      EstimateTime: result?.EstimateTime,
+      NextBusTime: result?.NextBusTime,
+      plateNumb: result?.PlateNumb,
     }
   })
 })
-const getStopOfRoute = async (data: Types.ApiParam) => {
+const getStopOfRoute = async (params: Types.ApiParam) => {
   try {
-    routeStop.value = await mainStore
-      .getStopOfRoute(data)
-      .then(res => res.filter(el => el.RouteName.Zh_tw === selectedRouteName.value))
+    routeStop.value = await mainStore.getStopOfRoute(params)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error.message)
+    const axiosError = error as AxiosError
+    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+      await mainStore.refreshToken()
+      getStopOfRoute(params)
     }
   }
 }
 
 // map
+const mapEl = ref()
 const geometry = ref<string>('')
-const getShapeOfRoute = async () => {
+const getShapeOfRoute = async (params: Types.ApiParam) => {
   try {
     geometry.value = await mainStore
-      .getShapeOfRoute({
-        city: selectedCity.value,
-        routeName: selectedRouteName.value,
-      })
-      .then(res => res.find(el => el.RouteName.Zh_tw === selectedRouteName.value)?.Geometry || '')
+      .getShapeOfRoute(params)
+      .then(
+        res => res.find(el => el.RouteName.Zh_tw === selectedRoute.value?.routeName)?.Geometry || ''
+      )
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(error.message)
+    const axiosError = error as AxiosError
+    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+      await mainStore.refreshToken()
+      getShapeOfRoute(params)
     }
   }
 }
@@ -137,46 +131,41 @@ const getShapeOfRoute = async () => {
 // search & refresh
 const isSearching = ref(false)
 const search = debounce(async () => {
-  if (!selectedRouteName.value || isSearching.value) return
+  if (!selectedRoute.value || isSearching.value) return
+
+  isSearching.value = true
 
   const params = {
     city: selectedCity.value,
-    routeName: selectedRouteName.value,
+    routeName: selectedRoute.value.routeName,
   }
-
   router.push({ params, query: { dir: currentDirection.value } })
-
-  isSearching.value = true
-  pause()
-
-  await Promise.all([getEstimatedTimeOfArrival(params), getStopOfRoute(params), getShapeOfRoute()])
+  await Promise.all([
+    getEstimatedTimeOfArrival(params),
+    getStopOfRoute(params),
+    getShapeOfRoute(params),
+  ])
+  mapEl.value.updateMap()
 
   isSearching.value = false
-  resume()
-  time.value = totalTime
 }, 500)
 const refresh = debounce(async () => {
-  if (isSearching.value) return
+  if (!selectedRoute.value || isSearching.value) return
 
-  pause()
+  isSearching.value = true
 
   await getEstimatedTimeOfArrival({
     city: selectedCity.value,
-    routeName: selectedRouteName.value,
+    routeName: selectedRoute.value.routeName,
   })
 
-  if (!time.value) {
-    await promiseTimeout(1000)
-  }
-
-  resume()
-  time.value = totalTime
+  isSearching.value = false
 }, 500)
 
 // countdown
 const totalTime = 30
 const time = ref(totalTime)
-const { pause, resume } = useTimeoutPoll(async () => {
+const { pause, resume } = useTimeoutPoll(() => {
   time.value--
   if (!time.value) {
     refresh()
@@ -184,20 +173,24 @@ const { pause, resume } = useTimeoutPoll(async () => {
 }, 1000)
 
 watch(selectedCity, () => {
-  selectedRouteName.value = ''
+  selectedRoute.value = null
 })
-watch(selectedRouteName, () => {
+watch(selectedRoute, () => {
   routeStop.value = []
   pause()
   time.value = totalTime
 })
+watch(isSearching, value => {
+  if (value) {
+    pause()
+  } else {
+    resume()
+    time.value = totalTime
+  }
+})
 
 onMounted(() => {
   getCityList()
-  if (props.city && props.routeName) {
-    getRouteList()
-    search()
-  }
 })
 </script>
 
@@ -213,33 +206,33 @@ onMounted(() => {
           v-model="selectedCity"
           :options="cityList"
           :reduce="(option: Types.ApiCityList) => option.City"
-          label="CityName"
           :clearable="false"
+          label="CityName"
           placeholder="選擇縣市"
           @option:selected="getRouteList"
         />
         <v-select
-          v-model="selectedRouteName"
+          v-model="selectedRoute"
           :options="routeList"
-          :reduce="(option: Types.RouteList) => option.label"
           :clearable="false"
+          label="label"
           placeholder="選擇路線"
         />
         <div class="flex gap-4">
           <button
             type="submit"
             class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50"
-            :disabled="!selectedRouteName"
+            :disabled="!selectedRoute"
           >
             搜尋
           </button>
           <button
             class="h-10 w-full rounded-full bg-primary-light text-sm font-bold text-white disabled:opacity-50 [&:hover>span]:hidden [&:hover]:before:content-['立即更新']"
-            :disabled="!selectedRouteName || !routes.length"
+            :disabled="!selectedRoute || !routes.length"
             @click.prevent="refresh"
           >
-            <span v-if="routes.length"> {{ time }} 秒後更新 </span>
-            <span v-else> 立即更新 </span>
+            <span v-if="!isSearching && time">{{ time }} 秒後更新</span>
+            <span v-else>更新中</span>
           </button>
         </div>
       </form>
@@ -258,9 +251,13 @@ onMounted(() => {
           往 {{ item.desc }}
         </router-link>
       </nav>
-      <div class="table-container overflow-auto bg-white">
+      <div class="h75 overflow-auto bg-white md:h-[calc(100vh-410px)]">
         <table class="w-full text-gray-900">
-          <tr v-for="route in routes" class="h-10 odd:bg-[#F2F2F2] even:bg-[#FEFCFC]">
+          <tr
+            v-for="route in routes"
+            class="h-10 odd:bg-[#F2F2F2] even:bg-[#FEFCFC] cursor-pointer hover:!bg-[#E5E5E5]"
+            @click="mapEl.moveMap(route.stopPosition)"
+          >
             <td width="50%">
               <div class="flex items-center">
                 <img src="@/assets/icon-arrow.png" class="mx-3" />
@@ -273,9 +270,9 @@ onMounted(() => {
               v-html="formatTime(route.EstimateTime, route.NextBusTime)"
             ></td>
             <td class="text-primary-light" width="25%">
-              <div class="flex items-center">
+              <div v-if="route.plateNumb && route.plateNumb !== '-1'" class="flex items-center">
                 <img src="@/assets/icon-bus.png" class="mr-2 only:hidden" />
-                <span v-if="route.plateNumb" class="text-sm">{{ route.plateNumb }}</span>
+                <span class="text-sm">{{ route.plateNumb }}</span>
               </div>
             </td>
           </tr>
@@ -284,7 +281,7 @@ onMounted(() => {
     </div>
 
     <div class="map-container overflow-hidden rounded-2xl shadow">
-      <TheMap :geometry="geometry" />
+      <TheMap :geometry="geometry" :routes="routes" ref="mapEl" @getRouteList="getRouteList" />
     </div>
 
     <footer class="text-center text-sm font-bold text-gray-800 md:text-lg">
@@ -325,14 +322,6 @@ onMounted(() => {
 }
 .route {
   grid-area: route;
-}
-.table-container {
-  height: 300px;
-}
-@screen md {
-  .table-container {
-    height: calc(100vh - 410px);
-  }
 }
 .map-container {
   grid-area: map;

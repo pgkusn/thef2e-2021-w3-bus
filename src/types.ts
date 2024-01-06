@@ -93,8 +93,9 @@ export interface Direction {
 }
 
 export interface RouteList {
-  direction: Direction[]
   label: string
+  routeName: string
+  direction: Direction[]
 }
 
 export interface Operator {
@@ -135,7 +136,17 @@ export interface SubRoute {
   Direction: number
 }
 
-export interface Coords {
-  latitude: number
-  longitude: number
+export interface Routes {
+  stopName: string
+  stopPosition: Position
+  EstimateTime: number
+  NextBusTime?: number
+  plateNumb?: string
+}
+
+export interface Marker {
+  position: Position
+  popupMsg: string
+  iconColor?: 'blue' | 'green'
+  isOpenPopup?: boolean
 }
