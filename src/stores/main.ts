@@ -3,7 +3,7 @@ import qs from 'qs'
 import { useLocalStorage } from '@vueuse/core'
 import * as Types from '@/types'
 
-const tdxApi = axios.create({
+const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 })
 
@@ -18,7 +18,7 @@ export const useMainStore = defineStore('main', () => {
         client_id: import.meta.env.VITE_CLIENT_ID,
         client_secret: import.meta.env.VITE_CLIENT_SECRET,
       }
-      const { access_token } = await tdxApi({
+      const { access_token } = await instance({
         method: 'post',
         url: '/auth/realms/TDXConnect/protocol/openid-connect/token',
         data: qs.stringify(data),
@@ -33,9 +33,8 @@ export const useMainStore = defineStore('main', () => {
   // 縣市列表
   const getCityList = async () => {
     try {
-      return await tdxApi({
-        url: '/api/basic/v2/Basic/City',
-        headers: { Authorization: authorization.value },
+      return await instance({
+        url: 'https://kenge-hsieh.firebaseio.com/city.json',
       }).then(res => res.data)
     } catch (error) {
       throw error
@@ -44,7 +43,7 @@ export const useMainStore = defineStore('main', () => {
   // 市區公車之路線資料
   const getRouteList = async (city: string): Promise<Types.RouteList[]> => {
     try {
-      const result = (await tdxApi({
+      const result = (await instance({
         url: `/api/basic/v2/Bus/Route/City/${city}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)) as Types.ApiRouteList[]
@@ -78,7 +77,7 @@ export const useMainStore = defineStore('main', () => {
   ): Promise<Types.ApiEstimatedTimeOfArrival[]> => {
     const { city, routeName } = params
     try {
-      const result = (await tdxApi({
+      const result = (await instance({
         url: `/api/basic/v2/Bus/EstimatedTimeOfArrival/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)) as Types.ApiEstimatedTimeOfArrival[]
@@ -91,7 +90,7 @@ export const useMainStore = defineStore('main', () => {
   const getStopOfRoute = async (params: Types.ApiParam): Promise<Types.ApiStopOfRoute[]> => {
     const { city, routeName } = params
     try {
-      const result = (await tdxApi({
+      const result = (await instance({
         url: `/api/basic/v2/Bus/StopOfRoute/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)) as Types.ApiStopOfRoute[]
@@ -104,7 +103,7 @@ export const useMainStore = defineStore('main', () => {
   const getShapeOfRoute = async (params: Types.ApiParam): Promise<Types.ApiShapeOfRoute[]> => {
     const { city, routeName } = params
     try {
-      return await tdxApi({
+      return await instance({
         url: `/api/basic/v2/Bus/Shape/City/${city}/${routeName}`,
         headers: { Authorization: authorization.value },
       }).then(res => res.data)

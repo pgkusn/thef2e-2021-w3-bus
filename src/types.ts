@@ -1,10 +1,6 @@
 export interface ApiCityList {
-  CityID: string
-  CityName: string
-  CityCode: string
   City: string
-  CountyID: string
-  Version: string
+  CityName: string
 }
 
 export interface ApiRouteList {
