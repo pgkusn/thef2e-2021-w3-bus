@@ -10,11 +10,24 @@ import retinaBlueIcon from 'leaflet/dist/images/marker-icon-2x.png'
 import blueIcon from 'leaflet/dist/images/marker-icon.png'
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
 
-const props = defineProps<{
+interface RouteItem {
+  stopName: string
+  stopPosition: Types.Position
+  EstimateTime?: number
+  NextBusTime?: number
+  plateNumb?: string
+}
+
+interface TheMapProps {
   geometry: string
-  routes: Types.Routes[]
+  routes: RouteItem[]
+}
+
+const props = defineProps<TheMapProps>()
+
+const emit = defineEmits<{
+  (e: 'getRouteList'): void
 }>()
-const emit = defineEmits(['getRouteList'])
 
 const route = useRoute()
 
@@ -46,12 +59,15 @@ const initMap = (position: Types.Position) => {
 }
 
 const addPolyline = async () => {
+  if (!props.geometry) return
+
   // remove polyline
   map.eachLayer(layer => {
     if (layer instanceof L.Polyline) {
       map?.removeLayer(layer)
     }
   })
+
   const wkt = new Wkt.Wkt()
   const json = wkt.read(props.geometry).toJson()
   const layer = L.geoJSON(json).addTo(map)

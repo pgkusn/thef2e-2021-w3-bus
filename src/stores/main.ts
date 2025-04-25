@@ -1,10 +1,27 @@
 import axios from 'axios'
 import qs from 'qs'
-import { useLocalStorage } from '@vueuse/core'
+import { useLocalStorage, useDebounceFn } from '@vueuse/core'
+import Swal from 'sweetalert2'
 import * as Types from '@/types'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+})
+
+const showErrorAlert = useDebounceFn(() => {
+  Swal.fire({
+    title: 'Oops...',
+    text: '請求過於頻繁，請稍後再試',
+    icon: 'error',
+    footer: '存取頻率：5 次/分',
+  })
+}, 1000)
+
+instance.interceptors.response.use(null, function (error) {
+  if (error.response?.status === 429) {
+    showErrorAlert()
+  }
+  return Promise.reject(error)
 })
 
 export const useMainStore = defineStore('main', () => {

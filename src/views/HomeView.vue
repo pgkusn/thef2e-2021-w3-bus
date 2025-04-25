@@ -3,7 +3,7 @@ import vSelect from 'vue-select'
 import 'vue-select/dist/vue-select.css'
 import { debounce } from 'lodash-es'
 import { useTimeoutPoll } from '@vueuse/core'
-import { AxiosError } from 'axios'
+import { isAxiosError } from 'axios'
 import { useMainStore } from '@/stores/main'
 import { formatTime } from '@/utils/formatTime'
 import * as Types from '@/types'
@@ -18,7 +18,7 @@ const router = useRouter()
 const route = useRoute()
 
 const selectedCity = ref(props.city)
-const selectedRoute = ref<Types.RouteList | null>()
+const selectedRoute = ref<Types.RouteList | null>(null)
 const currentDirection = computed(() => Number(route.query.dir) || 0)
 
 // city dropdown
@@ -27,8 +27,7 @@ const getCityList = async () => {
   try {
     cityList.value = await mainStore.getCityList()
   } catch (error) {
-    const axiosError = error as AxiosError
-    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+    if (isAxiosError(error) && error.response?.status === 401) {
       await mainStore.refreshToken()
       getCityList()
     }
@@ -52,8 +51,8 @@ const getRouteList = async () => {
       search()
     }
   } catch (error) {
-    const axiosError = error as AxiosError
-    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+    routeList.value.length = 0
+    if (isAxiosError(error) && error.response?.status === 401) {
       await mainStore.refreshToken()
       getRouteList()
     }
@@ -66,8 +65,8 @@ const getEstimatedTimeOfArrival = async (params: Types.ApiParam) => {
   try {
     arrivalTime.value = await mainStore.getEstimatedTimeOfArrival(params)
   } catch (error) {
-    const axiosError = error as AxiosError
-    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+    arrivalTime.value.length = 0
+    if (isAxiosError(error) && error.response?.status === 401) {
       await mainStore.refreshToken()
       getEstimatedTimeOfArrival(params)
     }
@@ -101,8 +100,8 @@ const getStopOfRoute = async (params: Types.ApiParam) => {
   try {
     routeStop.value = await mainStore.getStopOfRoute(params)
   } catch (error) {
-    const axiosError = error as AxiosError
-    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+    routeStop.value.length = 0
+    if (isAxiosError(error) && error.response?.status === 401) {
       await mainStore.refreshToken()
       getStopOfRoute(params)
     }
@@ -120,8 +119,8 @@ const getShapeOfRoute = async (params: Types.ApiParam) => {
         res => res.find(el => el.RouteName.Zh_tw === selectedRoute.value?.routeName)?.Geometry || ''
       )
   } catch (error) {
-    const axiosError = error as AxiosError
-    if (axiosError.response?.status === 429 || axiosError.response?.status === 401) {
+    geometry.value = ''
+    if (isAxiosError(error) && error.response?.status === 401) {
       await mainStore.refreshToken()
       getShapeOfRoute(params)
     }
@@ -163,7 +162,7 @@ const refresh = debounce(async () => {
 }, 500)
 
 // countdown
-const totalTime = 30
+const totalTime = 60
 const time = ref(totalTime)
 const { pause, resume } = useTimeoutPoll(() => {
   time.value--
@@ -183,15 +182,13 @@ watch(selectedRoute, () => {
 watch(isSearching, value => {
   if (value) {
     pause()
-  } else {
+  } else if (routes.value.length) {
     resume()
     time.value = totalTime
   }
 })
 
-onMounted(() => {
-  getCityList()
-})
+getCityList()
 </script>
 
 <template>
