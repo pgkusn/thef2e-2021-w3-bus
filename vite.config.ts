@@ -8,6 +8,7 @@ import UnoCSS from 'unocss/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: process.env.NODE_ENV === 'production' ? '/thef2e-2021-w3-bus/' : '/',
   plugins: [
     vue(),
     AutoImport({
