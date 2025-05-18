@@ -282,7 +282,7 @@ getCityList()
     </div>
 
     <footer class="text-center text-sm font-bold text-gray-800 md:text-lg">
-      ©2023 , Taiwan Bike. All Rights Reserved.
+      ©2023 , Taiwan Bus. All Rights Reserved.
     </footer>
   </div>
 </template>
