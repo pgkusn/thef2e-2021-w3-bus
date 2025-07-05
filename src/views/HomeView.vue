@@ -27,9 +27,8 @@ const getCityList = async () => {
   try {
     cityList.value = await mainStore.getCityList()
   } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 401) {
-      await mainStore.refreshToken()
-      getCityList()
+    if (error instanceof Error) {
+      console.error(error.message)
     }
   }
 }
@@ -53,8 +52,14 @@ const getRouteList = async () => {
   } catch (error) {
     routeList.value.length = 0
     if (isAxiosError(error) && error.response?.status === 401) {
-      await mainStore.refreshToken()
-      getRouteList()
+      try {
+        await mainStore.getToken()
+        getRouteList()
+      } catch (error) {
+        console.error('無法取得授權')
+      }
+    } else if (error instanceof Error) {
+      console.error(error.message)
     }
   }
 }
@@ -67,8 +72,14 @@ const getEstimatedTimeOfArrival = async (params: Types.ApiParam) => {
   } catch (error) {
     arrivalTime.value.length = 0
     if (isAxiosError(error) && error.response?.status === 401) {
-      await mainStore.refreshToken()
-      getEstimatedTimeOfArrival(params)
+      try {
+        await mainStore.getToken()
+        getEstimatedTimeOfArrival(params)
+      } catch (error) {
+        console.error('無法取得授權')
+      }
+    } else if (error instanceof Error) {
+      console.error(error.message)
     }
   }
 }
@@ -102,8 +113,14 @@ const getStopOfRoute = async (params: Types.ApiParam) => {
   } catch (error) {
     routeStop.value.length = 0
     if (isAxiosError(error) && error.response?.status === 401) {
-      await mainStore.refreshToken()
-      getStopOfRoute(params)
+      try {
+        await mainStore.getToken()
+        getStopOfRoute(params)
+      } catch (error) {
+        console.error('無法取得授權')
+      }
+    } else if (error instanceof Error) {
+      console.error(error.message)
     }
   }
 }
@@ -121,8 +138,14 @@ const getShapeOfRoute = async (params: Types.ApiParam) => {
   } catch (error) {
     geometry.value = ''
     if (isAxiosError(error) && error.response?.status === 401) {
-      await mainStore.refreshToken()
-      getShapeOfRoute(params)
+      try {
+        await mainStore.getToken()
+        getShapeOfRoute(params)
+      } catch (error) {
+        console.error('無法取得授權')
+      }
+    } else if (error instanceof Error) {
+      console.error(error.message)
     }
   }
 }

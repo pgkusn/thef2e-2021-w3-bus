@@ -1,5 +1,4 @@
 import axios from 'axios'
-import qs from 'qs'
 import { useLocalStorage, useDebounceFn } from '@vueuse/core'
 import Swal from 'sweetalert2'
 import * as Types from '@/types'
@@ -25,26 +24,23 @@ instance.interceptors.response.use(null, function (error) {
 })
 
 export const useMainStore = defineStore('main', () => {
-  const authorization = useLocalStorage('access_token', '')
+  const authorization = useLocalStorage('access_token', 'Bearer')
 
-  // 更新 token
-  const refreshToken = async () => {
+  // 取得 token
+  const getToken = async () => {
+    const baseURL =
+      import.meta.env.MODE === 'development'
+        ? import.meta.env.VITE_API_URL
+        : 'https://mock-api-pearl.vercel.app'
+
     try {
-      const data = {
-        grant_type: 'client_credentials',
-        client_id: import.meta.env.VITE_CLIENT_ID,
-        client_secret: import.meta.env.VITE_CLIENT_SECRET,
-      }
-      const { access_token } = await instance({
-        method: 'post',
-        url: '/auth/realms/TDXConnect/protocol/openid-connect/token',
-        data: qs.stringify(data),
-      }).then(res => res.data)
-      authorization.value = `Bearer ${access_token}`
+      const res = await instance({
+        baseURL,
+        url: '/tdx/token',
+      })
+      authorization.value = `Bearer ${res.data.token}`
     } catch (error) {
-      if (error instanceof Error) {
-        console.error(error.message)
-      }
+      throw error
     }
   }
   // 縣市列表
@@ -131,7 +127,7 @@ export const useMainStore = defineStore('main', () => {
 
   return {
     authorization,
-    refreshToken,
+    getToken,
     getCityList,
     getRouteList,
     getEstimatedTimeOfArrival,
