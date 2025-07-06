@@ -28,17 +28,12 @@ export const useMainStore = defineStore('main', () => {
 
   // 取得 token
   const getToken = async () => {
-    const baseURL =
-      import.meta.env.MODE === 'development'
-        ? import.meta.env.VITE_API_URL
-        : 'https://mock-api-pearl.vercel.app'
-
     try {
-      const res = await instance({
-        baseURL,
-        url: '/tdx/token',
+      const { data } = await instance({
+        baseURL: import.meta.env.VITE_TOKEN_API_URL,
+        url: '/tdx/token/bus',
       })
-      authorization.value = `Bearer ${res.data.token}`
+      authorization.value = `Bearer ${data.token}`
     } catch (error) {
       throw error
     }
