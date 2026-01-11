@@ -4,6 +4,8 @@
   "compilerOptions": {
     "composite": true,
     "lib": [],
-    "types": ["node", "jsdom"]
+    "types": ["node", "jsdom"],
+    // 繼承 tsconfig.app.json 的 esModuleInterop 設定
+    "esModuleInterop": true
   }
 }

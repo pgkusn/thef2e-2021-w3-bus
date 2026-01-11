@@ -7,6 +7,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    // 明確啟用 esModuleInterop 以支援 dayjs 等 CommonJS 模組的預設匯入
+    "esModuleInterop": true,
+    // 確保模組解析的一致性
+    "allowSyntheticDefaultImports": true
   }
 }
